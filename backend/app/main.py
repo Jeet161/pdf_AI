@@ -5,11 +5,13 @@ from app.routers import documents, pdf_tools
 
 app = FastAPI(title="AI Research Assistant API")
 
-# Allow the Next.js frontend (running on localhost:3000 during development)
-# to make requests to this API.
+# Allow both local development and the deployed Vercel frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://pdf-ai-iota.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -17,6 +19,15 @@ app.add_middleware(
 
 app.include_router(documents.router)
 app.include_router(pdf_tools.router)
+
+
+@app.get("/")
+def root():
+    return {
+        "message": "AI Research Assistant API",
+        "docs": "/docs",
+        "health": "/health",
+    }
 
 
 @app.get("/health")
