@@ -1,0 +1,12 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-dotenv==1.0.1
+sqlalchemy==2.0.35
+psycopg[binary]==3.2.10
+alembic==1.13.2
+pydantic-settings==2.5.2
+python-multipart==0.0.12
+pymupdf==1.24.11
+google-genai==0.3.0
+pgvector==0.3.6
+Pillow

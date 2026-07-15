@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ara_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ara_user
+      POSTGRES_PASSWORD: ara_password
+      POSTGRES_DB: ara_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
