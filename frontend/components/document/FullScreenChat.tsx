@@ -43,6 +43,8 @@ export default function FullScreenChat({ document }: Props) {
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const [textSize, setTextSize] = useState(12);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [localDocument, setLocalDocument] = useState<DocumentInfo>(document);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -73,6 +75,32 @@ export default function FullScreenChat({ document }: Props) {
       window.removeEventListener("mouseup", stopResizing);
     };
   }, [isResizing, resize, stopResizing]);
+
+  async function handleAnalyze() {
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/documents/${document.id}/analyze`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail ?? data.error ?? "Analysis failed.");
+        return;
+      }
+      // Update local copy of document with freshly returned analysis
+      setLocalDocument((prev) => ({
+        ...prev,
+        summary: data.summary ?? prev.summary,
+        main_points: data.main_points ?? prev.main_points,
+      }));
+      setActiveTab("analysis");
+    } catch {
+      setError("Could not reach the server. Is the backend running?");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/documents/${document.id}/messages`)
@@ -260,7 +288,7 @@ export default function FullScreenChat({ document }: Props) {
 
           {activeTab === "analysis" && (
             <div className="space-y-4">
-              {document.summary ? (
+              {localDocument.summary ? (
                 <>
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">Summary</p>
@@ -268,14 +296,14 @@ export default function FullScreenChat({ document }: Props) {
                       className="text-slate-700 dark:text-slate-200 leading-relaxed"
                       style={{ fontSize: `${textSize}px`, lineHeight: 1.6 }}
                     >
-                      {document.summary}
+                      {localDocument.summary}
                     </p>
                   </div>
-                  {document.main_points && document.main_points.length > 0 && (
+                  {localDocument.main_points && localDocument.main_points.length > 0 && (
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5">Key Points</p>
                       <ul className="space-y-2">
-                        {document.main_points.map((pt, i) => (
+                        {(localDocument.main_points ?? []).map((pt, i) => (
                           <li 
                             key={i} 
                             className="flex gap-2 text-slate-700 dark:text-slate-200"
@@ -289,11 +317,34 @@ export default function FullScreenChat({ document }: Props) {
                     </div>
                   )}
                 </>
-              ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500 text-center pt-8">
-                  No analysis yet. Ask questions to explore the document.
-                </p>
-              )}
+                ) : (
+                  <div className="flex flex-col items-center gap-4 pt-8 text-center">
+                    <div className="text-4xl">🔍</div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      No analysis yet. Click below to let the AI summarize and extract key points from this document.
+                    </p>
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="mt-2 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>✨ Analyze Document</>
+                      )}
+                    </button>
+                    {error && (
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1">{error}</p>
+                    )}
+                  </div>
+                )}
             </div>
           )}
         </div>
