@@ -1,0 +1,50 @@
+warning: in the working copy of 'backend/alembic/env.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/backend/alembic/env.py b/backend/alembic/env.py[m
+[1mindex 603df56..0deacee 100644[m
+[1m--- a/backend/alembic/env.py[m
+[1m+++ b/backend/alembic/env.py[m
+[36m@@ -2,7 +2,7 @@[m [mimport sys[m
+ from pathlib import Path[m
+ from logging.config import fileConfig[m
+ [m
+[31m-from sqlalchemy import engine_from_config[m
+[32m+[m[32mfrom sqlalchemy import engine_from_config, create_engine[m
+ from sqlalchemy import pool[m
+ [m
+ from alembic import context[m
+[36m@@ -20,8 +20,11 @@[m [mfrom app.models.chat_message import ChatMessage  # noqa: F401[m
+ # access to the values within the .ini file in use.[m
+ config = context.config[m
+ [m
+[31m-# Use our app's DATABASE_URL instead of the placeholder in alembic.ini[m
+[31m-config.set_main_option("sqlalchemy.url", settings.database_url)[m
+[32m+[m[32m# Use our app's DATABASE_URL instead of the placeholder in alembic.ini.[m
+[32m+[m[32m# NOTE: We do NOT use config.set_main_option() here because configparser[m
+[32m+[m[32m# treats '%' as a special interpolation character, which breaks URL-encoded[m
+[32m+[m[32m# passwords (e.g. %40 for '@'). Instead, we create the engine directly and[m
+[32m+[m[32m# inject it into the online migration runner below.[m
+ [m
+ # Interpret the config file for Python logging.[m
+ # This line sets up loggers basically.[m
+[36m@@ -76,17 +79,10 @@[m [mdef run_migrations_offline() -> None:[m
+ [m
+ [m
+ def run_migrations_online() -> None:[m
+[31m-    """Run migrations in 'online' mode.[m
+[31m-[m
+[31m-    In this scenario we need to create an Engine[m
+[31m-    and associate a connection with the context.[m
+[31m-[m
+[31m-    """[m
+[31m-    connectable = engine_from_config([m
+[31m-        config.get_section(config.config_ini_section, {}),[m
+[31m-        prefix="sqlalchemy.",[m
+[31m-        poolclass=pool.NullPool,[m
+[31m-    )[m
+[32m+[m[32m    """Run migrations in 'online' mode."""[m
+[32m+[m[32m    # Create engine directly from our settings so we avoid configparser's[m
+[32m+[m[32m    # % interpolation issue with URL-encoded characters in the password.[m
+[32m+[m[32m    connectable = create_engine(settings.database_url, poolclass=pool.NullPool)[m
+ [m
+     with connectable.connect() as connection:[m
+         context.configure([m
