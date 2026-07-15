@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, create_engine
 from sqlalchemy import pool
 
 from alembic import context
@@ -20,8 +20,11 @@ from app.models.chat_message import ChatMessage  # noqa: F401
 # access to the values within the .ini file in use.
 config = context.config
 
-# Use our app's DATABASE_URL instead of the placeholder in alembic.ini
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Use our app's DATABASE_URL instead of the placeholder in alembic.ini.
+# NOTE: We do NOT use config.set_main_option() here because configparser
+# treats '%' as a special interpolation character, which breaks URL-encoded
+# passwords (e.g. %40 for '@'). Instead, we create the engine directly and
+# inject it into the online migration runner below.
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -76,17 +79,10 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    """Run migrations in 'online' mode."""
+    # Create engine directly from our settings so we avoid configparser's
+    # % interpolation issue with URL-encoded characters in the password.
+    connectable = create_engine(settings.database_url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(
