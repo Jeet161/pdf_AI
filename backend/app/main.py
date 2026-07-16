@@ -8,10 +8,10 @@ app = FastAPI(title="AI Research Assistant API")
 # Allow both local development and the deployed Vercel frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://pdf-ai-iota.vercel.app",
-    ],
+allow_origins=[
+    "http://localhost:3000",
+    "https://pdf-ai-opal.vercel.app",
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

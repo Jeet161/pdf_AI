@@ -11,10 +11,10 @@ export const auth = betterAuth({
     enabled: true,
   },
 
-  trustedOrigins: [
-    "http://localhost:3000",
-    "https://pdf-ai-delta.vercel.app",
-  ],
+trustedOrigins: [
+  "http://localhost:3000",
+  "https://pdf-ai-opal.vercel.app",
+],
 
   plugins: [nextCookies()],
 });
