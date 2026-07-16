@@ -13,7 +13,7 @@ export const auth = betterAuth({
 
 trustedOrigins: [
   "http://localhost:3000",
-  "https://pdf-ai-opal.vercel.app",
+  "https://pdf-ai-psi.vercel.app",
 ],
 
   plugins: [nextCookies()],
