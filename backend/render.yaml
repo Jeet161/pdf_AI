@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ai-research-assistant-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # Supabase Transaction pooler (port 6543) + ?sslmode=require
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: INTERNAL_API_SECRET
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false          # Your Vercel frontend URL, e.g. https://pdf-ai-delta.vercel.app
+      - key: STORAGE_DIR
+        value: ./storage
+      - key: PYTHON_VERSION
+        value: "3.11"

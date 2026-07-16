@@ -13,10 +13,12 @@ backend/venv/
 __pycache__/
 *.py[cod]
 
-# Environment variables
+# Environment variables (real secrets)
 .env
-.env.*
-.env.example
+.env.local
+.env.*.local
+# Keep .env.example in git — it has no secrets, only placeholders
+!.env.example
 
 # Logs
 *.log
