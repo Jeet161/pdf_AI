@@ -30,23 +30,24 @@ EMBEDDING_DIMENSIONS = 768  # must match Vector(768) in models/document_chunk.py
 MAX_INPUT_CHARS = 30000
 
 
+from pydantic import BaseModel, Field
+
+class AnalysisResponse(BaseModel):
+    summary: str = Field(description="A concise 3-5 sentence summary of the document")
+    main_points: list[str] = Field(description="A list of 4-8 short strings, each one key point")
+
 def analyze_document(text: str) -> dict:
     """
     Sends the document's extracted text to Gemini once, and asks for both
     a short summary AND a list of main points in a single call - saving
     quota compared to two separate requests.
-
-    Returns {"summary": str, "main_points": list[str]}
     """
     client = get_client()
     truncated = text[:MAX_INPUT_CHARS]
 
     prompt = (
         "You are analyzing a document for a research assistant tool. "
-        "Given the document text below, respond with ONLY a JSON object "
-        "(no markdown, no code fences) with exactly these two keys:\n"
-        '- "summary": a concise 3-5 sentence summary of the document\n'
-        '- "main_points": a list of 4-8 short strings, each one key point\n\n'
+        "Given the document text below, analyze and extract the summary and main points.\n\n"
         f"Document text:\n{truncated}"
     )
 
@@ -55,6 +56,7 @@ def analyze_document(text: str) -> dict:
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
+            response_schema=AnalysisResponse,
             temperature=0.3,
         ),
     )
