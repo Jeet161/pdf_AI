@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -113,7 +114,29 @@ export default function ChatPanel({ documentId }: { documentId: string }) {
                   : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-bl-none shadow-sm"
                 }`}
             >
-              {msg.content}
+              {msg.role === "assistant" ? (
+                <ReactMarkdown
+                  components={{
+                    h1: ({children}) => <h1 className="text-base font-bold mb-1.5 mt-1">{children}</h1>,
+                    h2: ({children}) => <h2 className="text-sm font-bold mb-1.5 mt-2">{children}</h2>,
+                    h3: ({children}) => <h3 className="text-sm font-semibold mb-1 mt-2">{children}</h3>,
+                    p: ({children}) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-outside pl-4 mb-1.5 space-y-0.5">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-outside pl-4 mb-1.5 space-y-0.5">{children}</ol>,
+                    li: ({children}) => <li>{children}</li>,
+                    strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                    em: ({children}) => <em className="italic">{children}</em>,
+                    code: ({children}) => <code className="bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5 text-xs font-mono">{children}</code>,
+                    pre: ({children}) => <pre className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 text-xs font-mono overflow-x-auto mb-1.5">{children}</pre>,
+                    hr: () => <hr className="my-2 border-slate-200 dark:border-slate-700" />,
+                    blockquote: ({children}) => <blockquote className="border-l-3 border-indigo-400 pl-2 italic text-slate-500 dark:text-slate-400 mb-1.5">{children}</blockquote>,
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}

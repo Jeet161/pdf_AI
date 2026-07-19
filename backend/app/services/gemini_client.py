@@ -81,18 +81,31 @@ def embed_text(text: str) -> list[float]:
 
 def answer_question(question: str, context_chunks: list[str]) -> str:
     """
-    Answers a question about a document using only the provided context
-    chunks (retrieved via similarity search - see services/embeddings.py).
+    Answers a question about a document using the provided context chunks
+    (retrieved via similarity search - see services/embeddings.py).
+    If the document contains questions (e.g. a question paper) without
+    answers, the AI will solve them using its own knowledge.
     """
     client = get_client()
     context = "\n\n---\n\n".join(context_chunks)
 
     prompt = (
-        "You are a helpful research assistant answering questions about a "
-        "document. Use ONLY the context below to answer. If the answer "
-        "isn't in the context, say you don't know based on the document.\n\n"
-        f"Context:\n{context}\n\n"
-        f"Question: {question}"
+        "You are a highly capable AI research assistant. You have been given "
+        "context extracted from a document uploaded by the user.\n\n"
+        "Your job:\n"
+        "1. If the user's question can be answered using the document context, "
+        "use it as your primary reference and answer accurately.\n"
+        "2. If the document context contains QUESTIONS (e.g. it is a question "
+        "paper, exam sheet, or problem set) but does NOT contain the answers, "
+        "then USE YOUR OWN KNOWLEDGE to solve and answer those questions "
+        "thoroughly. Do not say 'the document does not contain the answer' — "
+        "instead, treat the document questions as problems to be solved.\n"
+        "3. If the user asks you to 'solve it', 'answer the questions', or "
+        "similar, identify all questions in the context and provide complete, "
+        "well-explained answers using your knowledge.\n"
+        "4. Always be helpful, clear, and detailed in your responses.\n\n"
+        f"Document Context:\n{context}\n\n"
+        f"User Question: {question}"
     )
 
     response = client.models.generate_content(
