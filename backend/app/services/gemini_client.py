@@ -1,6 +1,14 @@
+import io
 import json
+import logging
+import re
+import time
+import fitz  # PyMuPDF
+from PIL import Image
 from google import genai
 from google.genai import types
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 
@@ -21,7 +29,7 @@ def get_client() -> genai.Client:
     return _client
 
 
-TEXT_MODEL = "gemini-2.5-flash"
+TEXT_MODEL = "gemini-3.5-flash-lite"
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 768  # must match Vector(768) in models/document_chunk.py
 
@@ -114,3 +122,75 @@ def answer_question(question: str, context_chunks: list[str]) -> str:
         config=types.GenerateContentConfig(temperature=0.2),
     )
     return response.text
+
+
+def ocr_pdf_images(pdf_bytes: bytes) -> str:
+    """
+    Runs Gemini 2.0 Flash Vision OCR on every page of a scanned/photo PDF.
+    Called at Analyze time (never at upload time) so uploads stay instant.
+
+    Processes pages in batches of 3, with smart retry that honors the API's
+    own retryDelay field to avoid burning quota on pointless waits.
+    """
+    client = get_client()
+    results: list[str] = []
+
+    # Render all pages to images
+    image_pages: list[tuple[int, bytes]] = []
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        for page_index, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=150)
+            image_pages.append((page_index, pix.tobytes("png")))
+
+    if not image_pages:
+        return ""
+
+    # Process in batches of 3 pages
+    chunk_size = 3
+    chunks = [image_pages[i:i + chunk_size] for i in range(0, len(image_pages), chunk_size)]
+
+    for chunk_idx, chunk in enumerate(chunks):
+        if chunk_idx > 0:
+            time.sleep(3.0)  # Breathing room between API calls
+
+        logger.info(f"OCR: processing pages {[p+1 for p, _ in chunk]}...")
+
+        contents: list = []
+        for page_index, png_bytes in chunk:
+            pil_img = Image.open(io.BytesIO(png_bytes))
+            contents.append(pil_img)
+        contents.append(
+            "These are scanned pages from a document or exam paper. "
+            "Transcribe ALL visible text, questions, numbers, math equations, and options exactly as written. "
+            "Separate each page with '--- PAGE X ---' where X is its page number."
+        )
+
+        # Try once, then honor the API's own retryDelay if we hit a 429
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-flash-latest",
+                    contents=contents,
+                    config=types.GenerateContentConfig(temperature=0.0),
+                )
+                if response.text and response.text.strip():
+                    results.append(response.text.strip())
+                    logger.info(f"OCR chunk {chunk_idx + 1} succeeded ({len(response.text)} chars)")
+                break
+            except Exception as exc:
+                err_str = str(exc)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    if attempt == 0:
+                        # Parse the retryDelay from the error message
+                        delay_match = re.search(r"retry in ([\d.]+)s", err_str)
+                        wait = float(delay_match.group(1)) + 2.0 if delay_match else 15.0
+                        logger.warning(f"OCR 429 rate limit hit, waiting {wait:.1f}s before retry...")
+                        time.sleep(wait)
+                    else:
+                        logger.error(f"OCR chunk {chunk_idx + 1} failed after retry: {exc}")
+                        break
+                else:
+                    logger.error(f"OCR chunk {chunk_idx + 1} failed: {exc}")
+                    break
+
+    return "\n\n".join(results)

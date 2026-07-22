@@ -30,6 +30,7 @@ class Document(Base):
     file_size_bytes = Column(BigInteger, nullable=False)
 
     # Filled in during later phases (text extraction, summary, etc.)
+    status = Column(String, default="processing", nullable=False)  # "processing" | "completed" | "failed"
     extracted_text = Column(String, nullable=True)
     summary = Column(String, nullable=True)
     main_points = Column(JSON, nullable=True)  # list[str], stored as JSON

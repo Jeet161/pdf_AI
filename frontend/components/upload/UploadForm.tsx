@@ -13,8 +13,11 @@ export default function UploadForm() {
   async function uploadFile(file: File) {
     setError(null);
 
-    if (file.type !== "application/pdf") {
-      setError("Only PDF files are supported.");
+    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isImage = file.type.startsWith("image/") || /\.(png|jpg|jpeg|webp)$/i.test(file.name);
+
+    if (!isPdf && !isImage) {
+      setError("Only PDF and Image files (PNG, JPG, JPEG, WEBP) are supported.");
       return;
     }
 
@@ -84,7 +87,7 @@ export default function UploadForm() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf"
+        accept="application/pdf,image/png,image/jpeg,image/webp"
         onChange={handleFileSelected}
         disabled={isUploading}
         className="hidden"
@@ -118,7 +121,7 @@ export default function UploadForm() {
           {isUploading ? "Uploading file..." : "Click to upload or drag & drop"}
         </label>
 
-        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">PDF files only, up to 20 MB</p>
+        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">PDFs & Images (PNG, JPG, WEBP) up to 20 MB</p>
 
         {error && (
           <div className="mt-4 rounded-xl bg-red-50 dark:bg-red-950 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900">

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -39,10 +40,13 @@ def build_chunks_for_document(db: Session, document_id: str, text: str) -> int:
     db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
 
     pieces = chunk_text(text)
-    created = 0
+    
+    # Compute embeddings concurrently using a thread pool
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        embeddings = list(executor.map(embed_text, pieces))
 
-    for index, piece in enumerate(pieces):
-        embedding = embed_text(piece)
+    created = 0
+    for index, (piece, embedding) in enumerate(zip(pieces, embeddings)):
         chunk = DocumentChunk(
             document_id=document_id,
             chunk_index=index,

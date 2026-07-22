@@ -18,6 +18,7 @@ interface DocumentInfo {
   summary: string | null;
   main_points: string[] | null;
   extracted_text: string | null;
+  status?: string;
 }
 
 interface Props {
@@ -45,7 +46,39 @@ export default function FullScreenChat({ document }: Props) {
   const [isResizing, setIsResizing] = useState(false);
   const [textSize, setTextSize] = useState(12);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [localDocument, setLocalDocument] = useState<DocumentInfo>(document);
+
+  // Auto-poll document state if OCR / scanning is in progress in the background
+  useEffect(() => {
+    const isProcessing =
+      localDocument.status === "processing" ||
+      (!localDocument.extracted_text && localDocument.status !== "failed");
+
+    if (!isProcessing) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/documents/${localDocument.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.extracted_text || data.status === "completed" || data.status === "failed") {
+            setLocalDocument((prev) => ({
+              ...prev,
+              extracted_text: data.extracted_text ?? prev.extracted_text,
+              status: data.status ?? (data.extracted_text ? "completed" : "failed"),
+              summary: data.summary ?? prev.summary,
+              main_points: data.main_points ?? prev.main_points,
+            }));
+          }
+        }
+      } catch {
+        // Ignore background polling errors
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [localDocument.id, localDocument.status, localDocument.extracted_text]);
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     setIsResizing(true);
@@ -94,12 +127,34 @@ export default function FullScreenChat({ document }: Props) {
         ...prev,
         summary: data.summary ?? prev.summary,
         main_points: data.main_points ?? prev.main_points,
+        extracted_text: data.extracted_text ?? prev.extracted_text,
+        status: "completed",
       }));
       setActiveTab("analysis");
     } catch {
       setError("Could not reach the server. Is the backend running?");
     } finally {
       setIsAnalyzing(false);
+    }
+  }
+
+  async function handleRetry() {
+    setIsRetrying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/documents/${localDocument.id}/retry`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        setLocalDocument((prev) => ({ ...prev, status: "processing", extracted_text: null }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.detail ?? "Retry failed. Please try again later.");
+      }
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setIsRetrying(false);
     }
   }
 
@@ -274,15 +329,57 @@ export default function FullScreenChat({ document }: Props) {
 
           {activeTab === "text" && (
             <div>
-              {document.extracted_text ? (
+              {localDocument.extracted_text ? (
                 <pre 
                   className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-200"
                   style={{ fontSize: `${textSize}px`, lineHeight: 1.6 }}
                 >
-                  {document.extracted_text}
+                  {localDocument.extracted_text}
                 </pre>
+              ) : localDocument.status === "processing" ? (
+                <div className="rounded-2xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/40 p-5 text-center shadow-sm">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
+                    <svg className="h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">
+                    ⚡ Scanning &amp; Extracting Text...
+                  </h4>
+                  <p className="mt-1.5 text-xs leading-relaxed text-indigo-700 dark:text-indigo-300">
+                    Gemini AI is reading and transcribing pages in the background. The text will automatically appear here once complete!
+                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                    <span className="h-2 w-2 rounded-full bg-indigo-500 animate-ping" />
+                    Auto-refreshing live...
+                  </div>
+                </div>
+              ) : localDocument.status === "failed" || (!localDocument.extracted_text && localDocument.status !== "processing") ? (
+                <div className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/40 p-5 text-center shadow-sm">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                  </div>
+                  <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    ⚠️ Extraction Failed
+                  </h4>
+                  <p className="mt-1.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    The Gemini AI free-tier daily quota is exhausted. OCR will resume automatically after midnight Pacific Time (~1:30 PM IST).
+                  </p>
+                  <button
+                    onClick={handleRetry}
+                    disabled={isRetrying}
+                    className="mt-4 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-xs font-bold px-4 py-2 transition shadow-sm flex items-center gap-2 mx-auto"
+                  >
+                    {isRetrying ? (
+                      <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    ) : "🔄"}
+                    {isRetrying ? "Retrying..." : "Retry Extraction"}
+                  </button>
+                  {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+                </div>
               ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500 text-center pt-8">No text extracted.</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center pt-8">No text extracted from this document.</p>
               )}
             </div>
           )}

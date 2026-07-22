@@ -8,6 +8,7 @@ class DocumentOut(BaseModel):
     original_filename: str
     file_size_bytes: int
     uploaded_at: datetime
+    status: str = "completed"
 
     model_config = {"from_attributes": True}
 
