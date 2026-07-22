@@ -27,8 +27,25 @@ export default function UploadForm() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/documents/upload", {
+      // Get secure signed token from Next.js backend (well under Vercel's size limit)
+      const tokenRes = await fetch("/api/documents/upload/token", {
         method: "POST",
+      });
+      if (!tokenRes.ok) {
+        const tokenErr = await tokenRes.json().catch(() => ({}));
+        setError(tokenErr.detail ?? "Failed to authorize upload. Please log in again.");
+        setIsUploading(false);
+        return;
+      }
+      const { token } = await tokenRes.json();
+
+      // Upload the file directly to the FastAPI backend (Render) bypassing Vercel body limits
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const res = await fetch(`${backendUrl}/documents/upload/direct`, {
+        method: "POST",
+        headers: {
+          "X-Upload-Token": token,
+        },
         body: formData,
       });
 

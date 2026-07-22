@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException, status, Header
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -111,13 +111,65 @@ def _run_ocr_background(document_id: str, pdf_bytes: bytes, db_url: str) -> None
         engine.dispose()
 
 
-@router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
-async def upload_document(
+def verify_upload_token(token: str, secret: str) -> str:
+    """
+    Verifies the signed upload token.
+    Token format: user_id:expires_at:signature
+    Returns the user_id if valid, raises HTTPException otherwise.
+    """
+    import hmac
+    import hashlib
+    import time
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing upload token.",
+        )
+    parts = token.split(":")
+    if len(parts) != 3:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid upload token format.",
+        )
+    
+    user_id, expires_at_str, signature = parts
+    try:
+        expires_at = int(expires_at_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid expiration time in token.",
+        )
+    
+    if expires_at < time.time():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Upload token has expired.",
+        )
+        
+    expected_message = f"{user_id}:{expires_at_str}"
+    expected_signature = hmac.new(
+        secret.encode(),
+        expected_message.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    
+    if not hmac.compare_digest(signature, expected_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid upload token signature.",
+        )
+        
+    return user_id
+
+
+async def _process_and_save_upload(
+    file: UploadFile,
+    user_id: str,
+    db: Session,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
-):
+) -> Document:
     filename = file.filename or "document.pdf"
     content_type = (file.content_type or "").lower()
     ext = Path(filename).suffix.lower()
@@ -215,6 +267,28 @@ async def upload_document(
         logger.info(f"Scanned document detected — OCR queued in background for {document.id}")
 
     return document
+
+
+@router.post("/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    return await _process_and_save_upload(file, user_id, db, background_tasks)
+
+
+@router.post("/upload/direct", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+async def upload_document_direct(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    x_upload_token: str = Header(...),
+    db: Session = Depends(get_db),
+):
+    from app.core.config import settings
+    user_id = verify_upload_token(x_upload_token, settings.internal_api_secret)
+    return await _process_and_save_upload(file, user_id, db, background_tasks)
 
 
 @router.post("/{document_id}/retry", response_model=DocumentOut)
